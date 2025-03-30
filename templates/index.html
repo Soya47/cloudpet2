@@ -1,0 +1,1516 @@
+<!-- code from Modifying App Code for Noise Events Dashboard, idk what have done, usee this to test first -->
+<!-- # Current main issue: media gallery invalid date, noise detection.
+# Minor issue: chart type is at the right side, should be at left side, when enlarge photo, the photo not in middle. All photos and recording will store locally( I think this can keep lah)
+# code below try to solve media gallery date and noise detection, doing media gallery date first -->
+<!-- latest: media galllelry time issue solved, and have copy in word, now left noise detection, now noise detection all works, next will be working on env, responsive and authentication -->
+ <!-- now trying do login authentication, then can do deployment onn cloud and test -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudPet Monitoring</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.12.1/firebase-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.12.1/firebase-firestore.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .video-section, .controls-section, .dashboard-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .video-section {
+            flex: 2;
+            min-width: 640px;
+        }
+        .controls-section {
+            flex: 1;
+            min-width: 300px;
+        }
+        .dashboard-section {
+            flex-basis: 100%;
+            margin-top: 20px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 30px;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        input[type="number"] {
+            padding: 8px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .tab {
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            cursor: pointer;
+        }
+        .tab.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .event-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .event-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .event-info {
+            flex: 1;
+        }
+        .event-image {
+            width: 100px;
+            height: 75px;
+            object-fit: cover;
+            margin-left: 10px;
+            border-radius: 4px;
+        }
+        .object-detection-section {
+            margin-top: 20px;
+        }
+        #detectionStatus {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border-left: 4px solid #6649b8;
+        }
+        #detectedObjects {
+            margin-top: 10px;
+            font-style: italic;
+        }
+        select {
+            padding: 8px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+        }
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0a0e29;
+            background-image: 
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px);
+            background-size: 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+            color: #f8f9fa;
+        }
+
+        .video-section, .controls-section, .dashboard-section, .gallery-section {
+            background: rgba(13, 17, 45, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        button {
+            background: linear-gradient(45deg, #6649b8 0%, #5d41e2 100%);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+            transition: all 0.15s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+        }
+
+        .tab {
+            background-color: rgba(30, 30, 70, 0.6);
+            color: #adb5bd;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .tab.active {
+            background: linear-gradient(45deg, #6649b8 0%, #5d41e2 100%);
+            color: white;
+            border: none;
+        }
+
+        /* Universe theme for charts */
+        canvas {
+            filter: drop-shadow(0px 2px 8px rgba(124, 93, 250, 0.25));
+        }
+
+        .chart-container {
+            background: rgba(9, 14, 36, 0.5);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        h1, h2, h3 {
+            color: #e9ecef;
+            text-shadow: 0 0 10px rgba(123, 97, 255, 0.5);
+        }
+
+        #chartType {
+            background-color: rgba(30, 30, 70, 0.6);
+            color: #e9ecef;
+            border: 1px solid rgba(124, 93, 250, 0.25);
+            padding: 8px;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        #chartType option {
+            background-color: #0a0e29;
+            color: #e9ecef;
+        }
+
+        /* Customize modal for image gallery */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.9);
+        }
+
+        .modal-content {
+            margin: 5% auto;
+            display: block;
+            max-width: 80%;
+            max-height: 80%;
+        }
+
+        .close {
+            position: absolute;
+            top: 25px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #bbb;
+        }
+
+        /* Gallery styles */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            max-height: 400px; /* Adjust as needed */
+            overflow-y: auto; /* Scrolling within grid */
+        }
+
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            background: rgba(20, 27, 65, 0.7);
+            padding: 10px;
+        }
+
+        .gallery-item:hover {
+            transform: scale(1.03);
+        }
+
+        .gallery-item img, .gallery-item video {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .gallery-item-info {
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .gallery-category {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(111, 66, 193, 0.9);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .gallery-section {
+            max-height: 500px; /* Fixed height for gallery */
+            width: 100%;
+            background: rgba(13, 17, 45, 0.8);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Add this to your existing <style> section */
+
+        /* Basic responsive layout */
+        @media (max-width: 768px) {
+        .container {
+            flex-direction: column;
+        }
+        
+        .video-section, .controls-section, .dashboard-section, .gallery-section {
+            min-width: auto;
+            width: 100%;
+        }
+        
+        .video-section img {
+            width: 100%;
+            height: auto;
+        }
+        
+        /* Adjust chart sizes for mobile */
+        .chart-container {
+            height: 250px;
+        }
+        
+        /* Stack tabs vertically on small screens */
+        .tabs {
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            flex-grow: 1;
+            text-align: center;
+            min-width: 80px;
+        }
+        }
+
+        /* Enhance modal for mobile */
+        @media (max-width: 768px) {
+        .modal-content {
+            width: 95%;
+            max-width: none;
+        }
+        
+        .close {
+            top: 10px;
+            right: 10px;
+        }
+        }
+
+        /* Touch-friendly buttons */
+        @media (pointer: coarse) {
+        button, .tab, select, input[type="number"] {
+            min-height: 44px; /* Minimum touch target size */
+            font-size: 16px; /* Prevent zoom on iOS */
+        }
+        
+        .gallery-item {
+            padding: 15px; /* Larger touch targets */
+        }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="video-section">
+            <h1>Live Video Feed</h1>
+            <img src="{{ url_for('video_feed') }}" width="640" height="480">
+        </div>
+        
+        <div class="controls-section object-detection-section">
+            <h2>Object Detection</h2>
+            <div>
+                <label for="primaryObject">Detect this pet/person:</label>
+                <select id="primaryObject">
+                    <option value="cat">Cat</option>
+                    <option value="dog">Dog</option>
+                    <option value="bird">Bird</option>
+                    <option value="person">Person</option>
+                </select>
+            </div>
+            <div>
+                <label for="secondaryObject">Alert when near:</label>
+                <select id="secondaryObject">
+                    <option value="couch">Couch</option>
+                    <option value="bed">Bed</option>
+                    <option value="laptop">Laptop</option>
+                    <option value="keyboard">Keyboard</option>
+                    <option value="cell phone">Cell Phone</option>
+                    <option value="tv">TV</option>
+                    <option value="oven">Oven</option>
+                </select>
+            </div>
+            <div>
+                <label for="detectionCooldown">Detection Cooldown (seconds):</label>
+                <input type="number" id="detectionCooldown" value="30" min="5" max="300" step="1">
+            </div>
+            <div>
+                <label for="proximityThreshold">Proximity Threshold (pixels):</label>
+                <input type="number" id="proximityThreshold" value="150" min="50" max="500" step="10">
+            </div>
+            <button onclick="toggleObjectDetection()" id="detectionButton">🔍 Start Object Detection</button>
+            <div id="detectionStatus">Status: Not running</div>
+            <div id="detectedObjects"></div>
+        </div>
+
+        <div class="controls-section">
+            <h2>Controls</h2>
+            <button onclick="takeScreenshot()">📸 Take Screenshot</button>
+            <button onclick="toggleRecording()" id="recordButton">🎥 Start Recording</button>
+            
+            <h3>Noise Detection</h3>
+            <div>
+                <label for="threshold">Threshold (dB):</label>
+                <input type="number" id="threshold" value="30" min="0" max="100" step="1">
+            </div>
+            <div>
+                <label for="cooldown">Cooldown (seconds):</label>
+                <input type="number" id="cooldown" value="10" min="1" max="300" step="1">
+            </div>
+            <button onclick="startNoiseDetection()" id="noiseButton">🔊 Start Noise Detection</button>
+            <button onclick="testAudioLevel()">🔊 Test Current Audio Level</button>
+            <button onclick="debugAudio()">🔍 Debug Audio System</button>
+            <div id="audioLevelDisplay"></div>
+            <div>
+                <h3>Audio Device Selection</h3>
+                <div id="audioDeviceList">Loading devices...</div>
+                <button onclick="listAudioDevices()">Refresh Device List</button>
+            </div>
+        </div>
+
+        <div class="dashboard-section">
+            <h2>Noise Events Dashboard</h2>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('daily')">Daily</div>
+                <div class="tab" onclick="showTab('weekly')">Weekly</div>
+                <div class="tab" onclick="showTab('monthly')">Monthly</div>
+                <div class="tab" onclick="showTab('yearly')">Yearly</div>
+                <div class="tab" onclick="showTab('events')">Recent Events</div>
+            </div>
+            
+            <div id="daily-tab" class="tab-content active">
+                <div class="chart-container">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+            
+            <div id="weekly-tab" class="tab-content">
+                <div class="chart-container">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+            
+            <div id="monthly-tab" class="tab-content">
+                <div class="chart-container">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+
+            <div id="yearly-tab" class="tab-content">
+                <div class="chart-container">
+                    <canvas id="yearlyChart"></canvas>
+                </div>
+            </div>
+            
+            <div id="events-tab" class="tab-content">
+                <h3>Recent Noise Events</h3>
+                <div class="event-list" id="eventsList">
+                    <!-- Events will be populated here dynamically -->
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-bottom: 10px;">
+                <label for="chartType">Chart Type: </label>
+                <select id="chartType" onchange="changeChartType(this.value)">
+                    <option value="line">Area Chart</option>
+                    <option value="bar">Bar Chart</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="gallery-section">
+            <h2>Media Gallery</h2>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="showGalleryTab('all')">All</div>
+                <div class="tab" onclick="showGalleryTab('screenshots')">Manual Screenshots</div>
+                <div class="tab" onclick="showGalleryTab('noise')">Noise Detections</div>
+                <div class="tab" onclick="showGalleryTab('objects')">Object Detections</div>
+                <div class="tab" onclick="showGalleryTab('videos')">Video Recordings</div>
+            </div>
+            
+            <div class="gallery-grid" id="gallery-items">
+                <!-- Gallery items will be populated here dynamically -->
+            </div>
+            
+            <!-- Modal for viewing images/videos -->
+            <div id="mediaModal" class="modal">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <div id="modalContent" class="modal-content">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div id="modalCaption" style="text-align: center; color: white; padding: 10px;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Recording state
+        let isRecording = false;
+        let isListening = false;
+        
+        // Chart objects
+        let dailyChart, weeklyChart, monthlyChart;
+        
+        // Handle gallery
+        let galleryData = [];
+        let currentFilter = 'all';
+
+        // Initialize charts
+        function initCharts() {
+            const currentDate = new Date();
+            const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+            const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            // Daily chart
+            const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+            dailyChart = new Chart(dailyCtx, {
+                type: 'line', // Change to line for area chart
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Noise Events Today',
+                        data: Array(24).fill(0),
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        fill: true  // This makes it an area chart
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            },
+                            title: {
+                                display: true,
+                                text: 'Number of Events'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Hour of Day'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Weekly chart
+            const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+            weeklyChart = new Chart(weeklyCtx, {
+                type: 'line',  // Change to line for area chart
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'Noise Events This Week',
+                        data: Array(7).fill(0),
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        fill: true  // This makes it an area chart
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            },
+                            title: {
+                                display: true,
+                                text: 'Number of Events'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Day of Week'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Monthly chart
+            const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+            monthlyChart = new Chart(monthlyCtx, {
+                type: 'line',  // Change to line for area chart
+                data: {
+                    labels: daysArray,
+                    datasets: [{
+                        label: `Noise Events in ${currentDate.toLocaleString('default', { month: 'long' })}`,
+                        data: Array(daysInMonth).fill(0),
+                        backgroundColor: 'rgba(153, 102, 255, 0.5)',
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 1,
+                        fill: true  // This makes it an area chart
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            },
+                            title: {
+                                display: true,
+                                text: 'Number of Events'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Day of Month'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Add yearly chart
+            const yearlyCtx = document.getElementById('yearlyChart').getContext('2d');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            yearlyChart = new Chart(yearlyCtx, {
+                type: 'line',  // Area chart
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: `Noise Events in ${new Date().getFullYear()}`,
+                        data: Array(12).fill(0),
+                        backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1,
+                        fill: true  // Area chart
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            },
+                            title: {
+                                display: true,
+                                text: 'Number of Events'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Month of Year'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            setupFirebaseListeners();
+        });
+        
+        // Setup Firebase listeners for real-time updates
+        function setupFirebaseListeners() {
+            // Initial fetch
+            fetchNoiseData();
+            fetchGalleryData();
+            
+            // Set up interval for regular updates
+            setInterval(() => {
+                fetchNoiseData();
+                fetchGalleryData();
+            }, 5000); // Update every 5 seconds
+        }
+        
+        // Fetch noise data from server
+        function fetchNoiseData() {
+            fetch('/get_noise_data')
+                .then(response => response.json())
+                .then(data => {
+                    updateCharts(data);
+                    updateEventsList(data.recent_events);
+                })
+                .catch(error => console.error('Error fetching noise data:', error));
+        }
+        
+        // Update charts with new data
+        function updateCharts(data) {
+            // Update daily chart
+            dailyChart.data.datasets[0].data = data.daily_data;
+            dailyChart.update();
+            
+            // Update weekly chart
+            weeklyChart.data.datasets[0].data = data.weekly_data;
+            weeklyChart.update();
+            
+            // Update monthly chart
+            monthlyChart.data.datasets[0].data = data.monthly_data;
+            monthlyChart.update();
+
+            // Update yearly chart
+            if (data.yearly_data) {
+                yearlyChart.data.datasets[0].data = data.yearly_data;
+                yearlyChart.update();
+            }
+        }
+        
+        // Update recent events list
+        function updateEventsList(events) {
+            const eventsList = document.getElementById('eventsList');
+            
+            // Clear existing content
+            eventsList.innerHTML = '';
+            
+            // Add events
+            events.forEach(event => {
+                const eventItem = document.createElement('div');
+                eventItem.className = 'event-item';
+                
+                const eventInfo = document.createElement('div');
+                eventInfo.className = 'event-info';
+                eventInfo.innerHTML = `
+                    <strong>${new Date(event.timestamp).toLocaleString()}</strong><br>
+                    Noise Level: ${event.level.toFixed(1)} dB
+                `;
+                
+                const eventImage = document.createElement('img');
+                eventImage.className = 'event-image';
+                eventImage.src = event.image_url;
+                eventImage.alt = 'Event screenshot';
+                
+                eventItem.appendChild(eventInfo);
+                eventItem.appendChild(eventImage);
+                eventsList.appendChild(eventItem);
+            });
+            
+            if (events.length === 0) {
+                eventsList.innerHTML = '<p>No recent noise events</p>';
+            }
+        }
+        
+        // Tab switching
+        function showTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+        
+        // Screenshot function
+        function takeScreenshot() {
+            fetch('/take_screenshot', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert("Screenshot taken successfully!");
+                    } else {
+                        alert("Error taking screenshot: " + data.message);
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        
+        // Recording toggle
+        function toggleRecording() {
+            const recordButton = document.getElementById('recordButton');
+            
+            fetch('/toggle_recording', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    isRecording = data.status === 'recording';
+                    recordButton.textContent = isRecording ? '🛑 Stop Recording' : '🎥 Start Recording';
+                    
+                    if (!isRecording) {
+                        alert("Recording stopped! Video URL: " + data.video_url);
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        
+        // Start/stop noise detection with better error handling
+        function startNoiseDetection() {
+            const noiseButton = document.getElementById('noiseButton');
+            const threshold = document.getElementById('threshold').value;
+            const cooldown = document.getElementById('cooldown').value;
+            const display = document.getElementById('audioLevelDisplay');
+            
+            if (noiseButton.textContent.includes('Start')) {
+                // Show loading state
+                noiseButton.textContent = '⏳ Starting...';
+                noiseButton.disabled = true;
+                
+                // Start detection
+                fetch('/start_noise_detection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        threshold: threshold
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        isListening = true;
+                        noiseButton.textContent = '🛑 Stop Noise Detection';
+                        noiseButton.disabled = false;
+                        display.innerHTML = `<p style="color:green">Noise detection started with threshold ${threshold} dB</p>`;
+                        
+                        // Set cooldown
+                        fetch('/set_cooldown', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                cooldown: cooldown
+                            })
+                        });
+                        
+                        // Start a loop to regularly test audio
+                        if (window.audioTestInterval) {
+                            clearInterval(window.audioTestInterval);
+                        }
+                        window.audioTestInterval = setInterval(testAudioLevel, 2000);
+                    } else {
+                        noiseButton.textContent = '🔊 Start Noise Detection';
+                        noiseButton.disabled = false;
+                        display.innerHTML = `<p style="color:red">Error: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    noiseButton.textContent = '🔊 Start Noise Detection';
+                    noiseButton.disabled = false;
+                    display.innerHTML = `<p style="color:red">Error starting detection: ${error.message}</p>`;
+                });
+            } else {
+                // Show loading state
+                noiseButton.textContent = '⏳ Stopping...';
+                noiseButton.disabled = true;
+                
+                // Stop detection
+                fetch('/stop_noise_detection', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        isListening = false;
+                        noiseButton.textContent = '🔊 Start Noise Detection';
+                        noiseButton.disabled = false;
+                        display.innerHTML = `<p>Noise detection stopped</p>`;
+                        
+                        // Stop the audio test interval
+                        if (window.audioTestInterval) {
+                            clearInterval(window.audioTestInterval);
+                        }
+                    } else {
+                        noiseButton.textContent = '🛑 Stop Noise Detection';
+                        noiseButton.disabled = false;
+                        display.innerHTML = `<p style="color:red">Error: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    noiseButton.textContent = '🛑 Stop Noise Detection';
+                    noiseButton.disabled = false;
+                    display.innerHTML = `<p style="color:red">Error stopping detection: ${error.message}</p>`;
+                });
+            }
+        }
+        
+        // Test current audio level
+        function testAudioLevel() {
+            // Show loading message
+            const display = document.getElementById('audioLevelDisplay');
+            display.innerHTML = `<p>Testing audio level... <span class="spinner"></span></p>`;
+            
+            fetch('/test_audio')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP Error: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        let statusColor = "green";
+                        if (data.audio_level < 20) statusColor = "gray"; 
+                        else if (data.audio_level < data.threshold) statusColor = "orange";
+                        else statusColor = "red";
+                        
+                        display.innerHTML = `
+                            <p>Current audio level: <strong style="color:${statusColor}">${data.audio_level.toFixed(1)} dB</strong></p>
+                            <p>Threshold: ${data.threshold} dB</p>
+                            <div class="level-meter" style="width:100%; height:20px; background:#444; border-radius:3px;">
+                                <div style="width:${Math.min(data.audio_level, 100)}%; height:100%; background:${statusColor}; border-radius:3px;"></div>
+                            </div>
+                        `;
+                    } else {
+                        display.innerHTML = `<p style="color:red">Error: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error testing audio:', error);
+                    display.innerHTML = `<p style="color:red">Error testing audio: ${error.message}</p>`;
+                });
+        }
+
+
+        // Object detection variables
+        let objectDetectionRunning = false;
+        let cocoSsdModel = null;
+        let primaryObjectDetected = false;
+        let lastDetectionTime = 0;
+        let detectionCanvas = document.createElement('canvas');
+        let detectionCtx = detectionCanvas.getContext('2d');
+        let videoElement = null;
+
+        // Initialize object detection
+        async function initObjectDetection() {
+            try {
+                // Get video element
+                const videoElement = document.querySelector('.video-section img');
+                if (!videoElement) {
+                    console.error('Video element not found');
+                    return false;
+                }
+
+                // Set up canvas for detection
+                detectionCanvas.width = videoElement.width;
+                detectionCanvas.height = videoElement.height;
+
+                // Load COCO-SSD model
+                document.getElementById('detectionStatus').textContent = 'Status: Loading model...';
+                cocoSsdModel = await cocoSsd.load();
+                document.getElementById('detectionStatus').textContent = 'Status: Model loaded';
+                
+                return true;
+            } catch (error) {
+                console.error('Error initializing object detection:', error);
+                document.getElementById('detectionStatus').textContent = 'Status: Error loading model';
+                return false;
+            }
+        }
+
+        // Toggle object detection
+        async function toggleObjectDetection() {
+            const detectionButton = document.getElementById('detectionButton');
+            
+            if (!objectDetectionRunning) {
+                // Initialize if not already done
+                if (!cocoSsdModel) {
+                    const initialized = await initObjectDetection();
+                    if (!initialized) return;
+                }
+                
+                // Start detection
+                objectDetectionRunning = true;
+                primaryObjectDetected = false;
+                detectionButton.textContent = '⏹️ Stop Object Detection';
+                document.getElementById('detectionStatus').textContent = 'Status: Running - Waiting for ' + 
+                    document.getElementById('secondaryObject').value;
+                
+                // Start detection loop
+                detectObjects();
+            } else {
+                // Stop detection
+                objectDetectionRunning = false;
+                primaryObjectDetected = false;
+                detectionButton.textContent = '🔍 Start Object Detection';
+                document.getElementById('detectionStatus').textContent = 'Status: Stopped';
+            }
+        }
+
+        // Main detection loop
+        async function detectObjects() {
+            if (!objectDetectionRunning) return;
+            
+            try {
+                // Get video frame
+                const videoElement = document.querySelector('.video-section img');
+                if (!videoElement || !videoElement.complete) {
+                    setTimeout(detectObjects, 200);
+                    return;
+                }
+                
+                // Get selected objects to detect
+                const primaryObject = document.getElementById('primaryObject').value;
+                const secondaryObject = document.getElementById('secondaryObject').value;
+                const cooldownTime = parseInt(document.getElementById('detectionCooldown').value) * 1000;
+                const proximityThreshold = parseInt(document.getElementById('proximityThreshold').value);
+                
+                // Copy video frame to canvas for detection
+                detectionCtx.drawImage(videoElement, 0, 0, detectionCanvas.width, detectionCanvas.height);
+                
+                // Perform detection
+                const predictions = await cocoSsdModel.detect(detectionCanvas);
+                
+                // Check for our target objects
+                let primaryObj = null;
+                let secondaryObj = null;
+                
+                // Find objects in predictions
+                for (const prediction of predictions) {
+                    const className = prediction.class.toLowerCase();
+                    
+                    // Display detected objects
+                    document.getElementById('detectedObjects').textContent = 
+                        'Detected: ' + predictions.map(p => p.class).join(', ');
+                    
+                    if (className === secondaryObject) {
+                        secondaryObj = prediction;
+                        // If we find the secondary object first, we'll start looking for the primary
+                        primaryObjectDetected = true;
+                        document.getElementById('detectionStatus').textContent = `Status: Found ${secondaryObject}. Looking for ${primaryObject}...`;
+                    }
+                    
+                    if (className === primaryObject) {
+                        primaryObj = prediction;
+                    }
+                }
+                
+                // Check if both objects are detected and in proximity
+                if (primaryObj && secondaryObj) {
+                    // Calculate distance between objects
+                    const distance = calculateDistance(primaryObj.bbox, secondaryObj.bbox);
+                    
+                    // If objects are close and cooldown period has passed
+                    const currentTime = Date.now();
+                    if (distance < proximityThreshold && (currentTime - lastDetectionTime > cooldownTime)) {
+                        // Objects are close to each other - trigger alert!
+                        document.getElementById('detectionStatus').textContent = 
+                            `Status: ${primaryObject} near ${secondaryObject} detected!`;
+                        
+                        // Take screenshot and send alert
+                        takeDetectionScreenshot(primaryObject, secondaryObject);
+                        
+                        // Update last detection time
+                        lastDetectionTime = currentTime;
+                    }
+                }
+                
+                // Continue detection loop
+                setTimeout(detectObjects, 200);
+            } catch (error) {
+                console.error('Error during object detection:', error);
+                document.getElementById('detectionStatus').textContent = 'Status: Error during detection';
+                objectDetectionRunning = false;
+            }
+        }
+
+        // Calculate distance between two bounding boxes
+        function calculateDistance(bbox1, bbox2) {
+            // Calculate centers
+            const center1 = {
+                x: bbox1[0] + bbox1[2] / 2,
+                y: bbox1[1] + bbox1[3] / 2
+            };
+            
+            const center2 = {
+                x: bbox2[0] + bbox2[2] / 2,
+                y: bbox2[1] + bbox2[3] / 2
+            };
+            
+            // Calculate Euclidean distance
+            return Math.sqrt(
+                Math.pow(center1.x - center2.x, 2) + 
+                Math.pow(center1.y - center2.y, 2)
+            );
+        }
+
+        // Take screenshot when objects are detected
+        function takeDetectionScreenshot(primaryObject, secondaryObject) {
+            fetch('/object_detection_screenshot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    primaryObject: primaryObject,
+                    secondaryObject: secondaryObject
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    console.log('Object detection screenshot taken:', data.image_url);
+                } else {
+                    console.error('Error taking object detection screenshot:', data.message);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Fetch all media for gallery
+        function fetchGalleryData() {
+            fetch('/get_screenshots')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Process manual screenshots
+                        const manualScreenshots = data.manual_screenshots.map(item => ({
+                            ...item,
+                            type: 'screenshots',
+                            displayName: 'Manual Screenshot',
+                            // Ensure timestamp is correctly formatted
+                            timestamp: item.timestamp || new Date().toISOString().replace(/[:.]/g, '_')
+                        }));
+                        
+                        // Process noise screenshots
+                        const noiseScreenshots = data.noise_screenshots.map(item => ({
+                            ...item,
+                            type: 'noise',
+                            displayName: 'Noise Detection',
+                            timestamp: item.timestamp || new Date().toISOString().replace(/[:.]/g, '_')
+                        }));
+                        
+                        // Process object screenshots
+                        const objectScreenshots = data.object_screenshots.map(item => ({
+                            ...item,
+                            type: 'objects',
+                            displayName: 'Object Detection',
+                            timestamp: item.timestamp || new Date().toISOString().replace(/[:.]/g, '_')
+                        }));
+                        
+                        // Process videos
+                        const videos = data.videos.map(item => ({
+                            ...item,
+                            type: 'videos',
+                            displayName: 'Video Recording',
+                            timestamp: item.timestamp || new Date().toISOString().replace(/[:.]/g, '_').replace(' ', '_')
+                        }));
+                        
+                        // Combine all media
+                        galleryData = [
+                            ...manualScreenshots,
+                            ...noiseScreenshots,
+                            ...objectScreenshots,
+                            ...videos
+                        ];
+                        
+                        // Sort by timestamp, most recent first
+                        galleryData.sort((a, b) => {
+                            const timeA = a.timestamp.replace(/_/g, '');
+                            const timeB = b.timestamp.replace(/_/g, '');
+                            return timeB.localeCompare(timeA);
+                        });
+                        
+                        updateGallery();
+                    }
+                })
+                .catch(error => console.error('Error fetching gallery data:', error));
+        }
+
+        // Filter and display gallery items
+        function updateGallery() {
+            const galleryContainer = document.getElementById('gallery-items');
+            galleryContainer.innerHTML = '';
+            
+            const filteredItems = currentFilter === 'all' 
+                ? galleryData 
+                : galleryData.filter(item => item.type === currentFilter);
+            
+            if (filteredItems.length === 0) {
+                galleryContainer.innerHTML = '<p style="color: #aaa; text-align: center;">No items found</p>';
+                return;
+            }
+            
+            filteredItems.forEach(item => {
+                const galleryItem = document.createElement('div');
+                galleryItem.className = 'gallery-item';
+                
+                // Get the actual timestamp from the data instead of generating a new one
+                let formattedTimestamp;
+                if (item.timestamp) {
+                    // For the YYYYMMDD_HHMMSS format
+                    if (item.timestamp.includes('_') && !item.timestamp.includes(' ')) {
+                        const ts = item.timestamp;
+                        formattedTimestamp = `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)} ${ts.slice(9,11)}:${ts.slice(11,13)}:${ts.slice(13,15)}`;
+                    } else {
+                        formattedTimestamp = item.timestamp;
+                    }
+                } else {
+                    formattedTimestamp = "Unknown time";
+                }
+                
+                let mediaElement = '';
+                if (item.type === 'videos') {
+                    mediaElement = `<video src="${item.video_url}" poster="${item.thumbnail_url || ''}" controls></video>`;
+                } else {
+                    mediaElement = `<img src="${item.image_url}" alt="${item.displayName}">`;
+                }
+                
+                galleryItem.innerHTML = `
+                    <div class="gallery-category">${item.displayName}</div>
+                    ${mediaElement}
+                    <div class="gallery-item-info">
+                        <div>${formattedTimestamp}</div>
+                        ${item.level ? `<div>Noise Level: ${item.level.toFixed(1)} dB</div>` : ''}
+                        ${item.objects ? `<div>Detected: ${item.objects.join(', ')}</div>` : ''}
+                    </div>
+                `;
+                
+                // Add click handler to open modal
+                galleryItem.addEventListener('click', () => {
+                    openModal(item, formattedTimestamp);
+                });
+                
+                galleryContainer.appendChild(galleryItem);
+            });
+        }
+
+        // Robust timestamp parsing function
+        function parseTimestamp(timestampStr) {
+            if (!timestampStr) return new Date().toLocaleString();
+            
+            try {
+                // Try multiple parsing strategies
+                const parsingStrategies = [
+                    () => new Date(timestampStr).toLocaleString(),
+                    () => new Date(timestampStr.replace(/_/g, ' ')).toLocaleString(),
+                    () => new Date(timestampStr.replace(/_/g, '-')).toLocaleString(),
+                    () => {
+                        // Custom parsing for specific format
+                        const parts = timestampStr.split('_');
+                        if (parts.length >= 2) {
+                            const datePart = parts[0];
+                            const timePart = parts[1].replace(/(\d{2})(\d{2})(\d{2})/, '$1:$2:$3');
+                            return new Date(`${datePart} ${timePart}`).toLocaleString();
+                        }
+                        return new Date().toLocaleString();
+                    }
+                ];
+
+                for (let strategy of parsingStrategies) {
+                    try {
+                        const parsed = strategy();
+                        if (parsed && !isNaN(new Date(parsed))) {
+                            return parsed;
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+
+                return new Date().toLocaleString();
+            } catch (e) {
+                console.error('Timestamp parsing error:', e);
+                return new Date().toLocaleString();
+            }
+        }
+
+        function showGalleryTab(tabName) {
+            document.querySelectorAll('.gallery-section .tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`.gallery-section .tab[onclick="showGalleryTab('${tabName}')"]`).classList.add('active');
+            
+            currentFilter = tabName;
+            updateGallery();
+        }
+
+        function openModal(item, formattedTimestamp) {
+            const modal = document.getElementById('mediaModal');
+            const modalContent = document.getElementById('modalContent');
+            const modalCaption = document.getElementById('modalCaption');
+            
+            modal.style.display = 'block';
+            
+            if (item.type === 'videos') {
+                modalContent.innerHTML = `<video src="${item.video_url}" controls autoplay style="max-width:100%; max-height:80vh;"></video>`;
+            } else {
+                modalContent.innerHTML = `<img src="${item.image_url}" style="max-width:100%; max-height:80vh;">`;
+            }
+            
+            let captionText = `${item.displayName} - ${formattedTimestamp}`;
+            
+            if (item.level) {
+                captionText += ` - Noise Level: ${item.level.toFixed(1)} dB`;
+            }
+            
+            if (item.primaryObject && item.secondaryObject) {
+                captionText += ` - ${item.primaryObject} near ${item.secondaryObject}`;
+            }
+            
+            modalCaption.innerText = captionText;
+        }
+
+        function closeModal() {
+            document.getElementById('mediaModal').style.display = 'none';
+        }
+
+        // Initialize gallery on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            setupFirebaseListeners();
+            fetchGalleryData();
+            
+            // Close modal when clicking outside content
+            window.addEventListener('click', function(event) {
+                const modal = document.getElementById('mediaModal');
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        });
+
+        // Change chart type function
+        function changeChartType(type) {
+            // Update all charts to the selected type
+            dailyChart.config.type = type;
+            dailyChart.update();
+            
+            weeklyChart.config.type = type;
+            weeklyChart.update();
+            
+            monthlyChart.config.type = type;
+            monthlyChart.update();
+            
+            yearlyChart.config.type = type;
+            yearlyChart.update();
+        }
+
+        // Add this function to your JavaScript section
+        function debugAudio() {
+            const display = document.getElementById('audioLevelDisplay');
+            display.innerHTML = `<p>Getting detailed audio diagnostics... <span class="spinner"></span></p>`;
+            
+            fetch('/debug_audio')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        let html = '<h4>Audio Debug Results:</h4>';
+                        
+                        // Show device info
+                        html += '<p><strong>Available Input Devices:</strong></p><ul>';
+                        if (data.devices.length === 0) {
+                            html += '<li>No input devices found!</li>';
+                        } else {
+                            data.devices.forEach(device => {
+                                html += `<li>Device ${device.index}: ${device.name} (${device.channels} channels)</li>`;
+                            });
+                        }
+                        html += '</ul>';
+                        
+                        // Show samples
+                        html += '<p><strong>Audio Samples:</strong></p><ul>';
+                        if (data.samples.length === 0) {
+                            html += '<li>No samples collected!</li>';
+                        } else {
+                            data.samples.forEach((sample, i) => {
+                                html += `<li>Sample ${i+1}: Level=${sample.level.toFixed(1)} dB, RMS=${sample.rms.toFixed(1)}, Max=${sample.max_value}</li>`;
+                            });
+                        }
+                        html += '</ul>';
+                        
+                        // Add noise detector status button
+                        html += '<p><button onclick="checkNoiseDetectorStatus()">Check Noise Detector Status</button></p>';
+                        
+                        display.innerHTML = html;
+                    } else {
+                        display.innerHTML = `<p style="color:red">Error debugging audio: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    display.innerHTML = `<p style="color:red">Error debugging audio: ${error.message}</p>`;
+                });
+        }
+
+        // Add this new function to check the noise detector status
+        function checkNoiseDetectorStatus() {
+            const display = document.getElementById('audioLevelDisplay');
+            display.innerHTML = `<p>Getting noise detector status... <span class="spinner"></span></p>`;
+            
+            fetch('/noise_detector_status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        let html = '<h4>Noise Detector Status:</h4>';
+                        html += `<p><strong>Active:</strong> ${data.is_listening ? '✅ Yes' : '❌ No'}</p>`;
+                        html += `<p><strong>Threshold:</strong> ${data.threshold} dB</p>`;
+                        html += `<p><strong>Current Level:</strong> ${data.current_level.toFixed(1)} dB</p>`;
+                        html += `<p><strong>Cooldown:</strong> ${data.cooldown} seconds</p>`;
+                        html += `<p><strong>Audio Stream Active:</strong> ${data.audio_stream_active ? '✅ Yes' : '❌ No'}</p>`;
+                        html += `<p><strong>System Time:</strong> ${data.system_time}</p>`;
+                        
+                        if (data.last_alert_time) {
+                            const timeSince = data.time_since_last_alert;
+                            html += `<p><strong>Time Since Last Alert:</strong> ${timeSince.toFixed(1)} seconds</p>`;
+                        }
+                        
+                        display.innerHTML = html;
+                    } else {
+                        display.innerHTML = `<p style="color:red">Error getting status: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    display.innerHTML = `<p style="color:red">Error getting status: ${error.message}</p>`;
+                });
+        }
+
+        function listAudioDevices() {
+            fetch('/list_audio_devices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const deviceList = document.getElementById('audioDeviceList');
+                        
+                        if (data.devices.length === 0) {
+                            deviceList.innerHTML = '<p>No audio input devices found</p>';
+                            return;
+                        }
+                        
+                        let html = '<select id="audioDeviceSelect">';
+                        data.devices.forEach(device => {
+                            html += `<option value="${device.index}">Device ${device.index}: ${device.name}</option>`;
+                        });
+                        html += '</select>';
+                        html += '<button onclick="selectAudioDevice()">Use Selected Device</button>';
+                        
+                        deviceList.innerHTML = html;
+                    } else {
+                        alert("Error listing audio devices: " + data.message);
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function selectAudioDevice() {
+            const deviceSelect = document.getElementById('audioDeviceSelect');
+            const deviceIndex = deviceSelect.value;
+            
+            fetch('/select_audio_device', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    device_index: deviceIndex
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`Device selected successfully. Current audio level: ${data.audio_level.toFixed(1)} dB`);
+                } else {
+                    alert("Error selecting device: " + data.message);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    </script>
+</body>
+</html>
