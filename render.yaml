@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: cloudpet-monitor
+    name: cloudpet2
     env: python
     pythonVersion: "3.10.12"  # 👈 Explicitly set Python version to 3.10
     buildCommand: |
