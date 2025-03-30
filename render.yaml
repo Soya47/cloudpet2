@@ -2,7 +2,7 @@ services:
   - type: web
     name: cloudpet-monitor
     env: python
-    pythonVersion: "3.10"  # 👈 Explicitly set Python version to 3.10
+    pythonVersion: "3.10.12"  # 👈 Explicitly set Python version to 3.10
     buildCommand: |
       apt-get update && apt-get install -y portaudio19-dev
       pip install -r requirements.txt
